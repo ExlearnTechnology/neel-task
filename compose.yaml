@@ -16,6 +16,7 @@ services:
       start_period: 10s
 
   api:
+    image: ${API_IMAGE:-neel-task-api:latest}
     build:
       context: ./backend
     restart: unless-stopped
@@ -36,6 +37,7 @@ services:
       start_period: 15s
 
   frontend:
+    image: ${FRONTEND_IMAGE:-neel-task-frontend:latest}
     build:
       context: ./frontend
     restart: unless-stopped
