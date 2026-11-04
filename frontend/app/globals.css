@@ -18,7 +18,7 @@ body {
 }
 
 .card {
-  width: min(100%, 620px);
+  width: min(100%, 720px);
   padding: 40px;
   border: 1px solid #dfe6f1;
   border-radius: 16px;
@@ -42,6 +42,81 @@ h1 {
 .description {
   color: #526078;
   line-height: 1.6;
+}
+
+.submission-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.submission-form label {
+  margin-top: 8px;
+  font-weight: 700;
+}
+
+.submission-form input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #c8d2e1;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+}
+
+.submission-form input:focus {
+  border-color: #3156a3;
+  outline: 2px solid rgb(49 86 163 / 18%);
+}
+
+.submission-form button {
+  margin-top: 8px;
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: #3156a3;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.submission-form button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.message {
+  min-height: 1.5em;
+}
+
+.entries {
+  margin-top: 28px;
+}
+
+.entries h2 {
+  font-size: 1.25rem;
+}
+
+.entries ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entries li {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid #dfe6f1;
+  border-radius: 10px;
+}
+
+.entries time {
+  color: #68758a;
+  font-size: 0.85rem;
 }
 
 .health {

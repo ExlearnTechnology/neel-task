@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EC2 Compose Reference",
-  description: "Next.js, FastAPI, and PostgreSQL deployed with Docker Compose on EC2.",
+  title: "Favorite Pet Entries",
+  description: "Share your favorite pet and save your entry in PostgreSQL.",
 };
 
 export default function RootLayout({

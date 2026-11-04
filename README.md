@@ -1,6 +1,6 @@
 # EC2 + Docker Compose deployment
 
-This is a deployable reference project for the assessment's Next.js frontend, Python backend, and PostgreSQL database. All application services run as Docker Compose containers on **one EC2 virtual machine**. Terraform provisions the host and its AWS networking; GitHub Actions deploys a source archive through private S3 and AWS Systems Manager (SSM). No SSH port is opened.
+This is a deployable reference project with a Next.js frontend, Python backend, and PostgreSQL database. Users can submit their name and favorite pet; entries are saved in PostgreSQL and displayed on the page. All application services run as Docker Compose containers on **one EC2 virtual machine**. Terraform provisions the host and its AWS networking; GitHub Actions deploys a source archive through private S3 and AWS Systems Manager (SSM). No SSH port is opened.
 
 ## Architecture
 
@@ -23,6 +23,7 @@ Terraform also configures an EC2 instance role for SSM, artifact download, and r
 
 ## What this does and does not provide
 
+- The `/api/submissions` API stores and lists name/favorite-pet entries. It creates its table automatically the first time entries are read or saved.
 - The database is a PostgreSQL container on the same host, not RDS. Its Compose volume survives container restarts, but this single-VM design is **not highly available** and is not suitable for important data without tested off-host backups.
 - A single EC2 host has no automatic horizontal scaling or failover. This is intentional for the requested EC2 + Compose deployment; ECS, EKS, and load balancers are not part of this design.
 - App traffic is public on ports 80/443. Administration and deployments use SSM; do not add a public SSH rule.
@@ -131,7 +132,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Open `http://localhost` and `http://localhost/api/health`. Stop the services with `docker compose down`; the named database volume is retained. To delete local database data as well, use `docker compose down --volumes`.
+Open `http://localhost` to submit and view entries. The API is also available at `http://localhost/api/submissions`; database health is at `http://localhost/api/health`. Stop the services with `docker compose down`; the named database volume is retained. To delete local database data as well, use `docker compose down --volumes`.
 
 ## Infrastructure lifecycle and cost
 
