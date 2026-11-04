@@ -22,7 +22,7 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'ap-south-1' }}
 
-      - name: Validate deployment configuration
+      - name: Validate deployment configuration 2
         env:
           AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
