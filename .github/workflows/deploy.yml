@@ -31,7 +31,7 @@ jobs:
           test -n "$EC2_INSTANCE_ID" || { echo "Set the EC2_INSTANCE_ID repository variable"; exit 1; }
           test -n "$ECR_REPOSITORY" || { echo "Set the ECR_REPOSITORY repository variable"; exit 1; }
           test -n "$APP_PASSWORD_PARAMETER_NAME" || { echo "Set APP_PASSWORD_PARAMETER_NAME to the SSM SecureString parameter name"; exit 1; }
-          [[ "$EC2_INSTANCE_ID" =~ ^i-(\w{8}|\w{17})$ ]] || {
+          [[ "$EC2_INSTANCE_ID" =~ ^i-([0-9a-f]{8}|[0-9a-f]{17})$ ]] || {
             echo "EC2_INSTANCE_ID must be the full EC2 ID, including the i- prefix (for example: i-03ddcc7c09466e1e2)"
             exit 1
           }
