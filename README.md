@@ -14,7 +14,7 @@ EC2 (Amazon Linux 2023; public subnet; ports 80/443 only)
     |-- /api/*  -> FastAPI container -> PostgreSQL container
                                     PostgreSQL data -> encrypted EBS-backed Docker volume
 
-GitHub Actions --OIDC--> restricted AWS role
+GitHub Actions --IAM access key secrets--> restricted AWS identity
   |-- build and push API/frontend images -> Amazon ECR
   `-- deployment command -> AWS Systems Manager -> EC2 pulls images from ECR
 ```
@@ -34,14 +34,19 @@ Terraform also configures an EC2 instance role for SSM and access to deployment 
 
 The GitHub Actions workflow builds the API and frontend Docker images, pushes them to ECR, then uses SSM to make EC2 pull and run them. It defaults to region `ap-south-1`; set `EC2_INSTANCE_ID` to `i-03ddcc7c09466e1e2`. It uses `/opt/r2-assessment` with Compose project name `r2-assessment`. The EC2 instance must already be SSM-managed and have Docker Compose, AWS CLI, an instance profile with ECR pull access and permission to read the database password SecureString from Parameter Store. The workflow writes the parameter value to `/opt/r2-assessment/.env` with restrictive permissions. Keep the Parameter Store value unchanged for an initialized PostgreSQL data volume.
 
-Create one private ECR repository (for example, `neel-task`) in `ap-south-1`. Create a GitHub Actions OIDC IAM role that trusts `repo:ExlearnTechnology/neel-task:ref:refs/heads/main`. Its permissions must allow ECR authentication and image pushes to that repository, and `ssm:SendCommand` to the EC2 instance using `AWS-RunShellScript` plus `ssm:GetCommandInvocation`. Do not use long-lived AWS access keys.
+Create one private ECR repository (for example, `neel-task`) in `ap-south-1`. Create a dedicated IAM user for GitHub Actions (without console access) and grant only ECR authentication/image-push permissions for this repository and SSM `SendCommand` to the EC2 instance using `AWS-RunShellScript`, plus `ssm:GetCommandInvocation`. Create an access key for this user and store both key values as GitHub Actions secrets. Long-lived IAM user keys are less secure than OIDC: rotate them regularly, never commit them, and revoke them immediately if exposed.
 
-In the repository's **Settings → Secrets and variables → Actions → Variables**, add:
+In the repository's **Settings → Secrets and variables → Actions → Secrets**, add:
 
-- `AWS_ROLE_ARN`: the GitHub OIDC role ARN.
+- `AWS_ACCESS_KEY_ID`: access key ID for the dedicated IAM user.
+- `AWS_SECRET_ACCESS_KEY`: secret access key for the dedicated IAM user.
+
+Under **Variables**, add:
+
 - `ECR_REPOSITORY`: the ECR repository name (for example, `neel-task`).
 - `EC2_INSTANCE_ID`: `i-03ddcc7c09466e1e2`.
 - `APP_PASSWORD_PARAMETER_NAME`: the full SSM Parameter Store name for the database `SecureString` (for example, `/neel-task/prod/db-password`).
+- `AWS_REGION`: `ap-south-1` (optional; this is the workflow default).
 
 The EC2 instance profile needs ECR pull permissions (for example, `AmazonEC2ContainerRegistryReadOnly`), SSM managed-instance permissions, and `ssm:GetParameter` plus any required `kms:Decrypt` permission for the password parameter. The workflow updates `/opt/r2-assessment/compose.yaml` and `Caddyfile`, retrieves the password from Parameter Store, and keeps the Compose project name so the existing database volume is reused. If your running Compose project or directory differs, update the deployment paths/project name in `.github/workflows/deploy.yml` before deploying.
 
@@ -76,7 +81,7 @@ terraform output
 
 Terraform creates an AWS GitHub OIDC provider. If your account already has that provider, import the existing provider into Terraform state or adapt the configuration to reuse it before applying.
 
-The deployment workflow needs an OIDC role with ECR push and SSM deployment permissions, and the EC2 instance needs ECR pull permissions. See [Deploy to a manually created EC2 instance](#deploy-to-a-manually-created-ec2-instance) for the GitHub variables and requirements.
+The deployment workflow uses the GitHub Actions IAM user credentials to push images and send the SSM deployment command. The EC2 instance needs ECR pull permissions. See [Deploy to a manually created EC2 instance](#deploy-to-a-manually-created-ec2-instance) for the GitHub secrets, variables, and requirements.
 
 ## Deploy and verify
 
