@@ -1,0 +1,10 @@
+.env
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.tar.gz
+node_modules/
+.next/
+__pycache__/
+.pytest_cache/

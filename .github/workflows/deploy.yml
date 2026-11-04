@@ -1,0 +1,123 @@
+name: Test and deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements-dev.txt
+      - run: python -m pytest -q tests
+        working-directory: backend
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Package source
+        run: >-
+          tar --exclude=.git --exclude=.env --exclude=terraform.tfvars
+          --exclude=.terraform --exclude='*.tfstate*'
+          -czf /tmp/release.tar.gz
+          .github backend frontend infra compose.yaml Caddyfile .env.example README.md
+
+      - name: Upload release archive
+        env:
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+        run: aws s3 cp /tmp/release.tar.gz "s3://${ARTIFACT_BUCKET}/releases/${GITHUB_SHA}.tar.gz"
+
+      - name: Store database password
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          APP_PASSWORD_PARAMETER_NAME: ${{ vars.APP_PASSWORD_PARAMETER_NAME }}
+        run: |
+          test -n "$APP_PASSWORD_PARAMETER_NAME"
+          test -n "$POSTGRES_PASSWORD"
+          aws ssm put-parameter \
+            --name "$APP_PASSWORD_PARAMETER_NAME" \
+            --type SecureString \
+            --overwrite \
+            --value "$POSTGRES_PASSWORD"
+
+      - name: Deploy with Systems Manager
+        env:
+          ARTIFACT_BUCKET: ${{ vars.ARTIFACT_BUCKET }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          APP_PASSWORD_PARAMETER_NAME: ${{ vars.APP_PASSWORD_PARAMETER_NAME }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_BUCKET"
+          test -n "$EC2_INSTANCE_ID"
+          test -n "$APP_PASSWORD_PARAMETER_NAME"
+          remote_script=$(cat <<EOF
+          set -eu
+          app_root="/opt/r2-assessment"
+          release_dir="\$app_root/releases/${DEPLOY_SHA}"
+          mkdir -p "\$release_dir"
+          aws s3 cp "s3://${ARTIFACT_BUCKET}/releases/${DEPLOY_SHA}.tar.gz" /tmp/r2-release.tar.gz
+          tar -xzf /tmp/r2-release.tar.gz -C "\$release_dir"
+          rm -f /tmp/r2-release.tar.gz
+          env_file="\$app_root/.env"
+          if [ ! -f "\$env_file" ]; then printf 'SITE_ADDRESS=:80\\n' > "\$env_file"; fi
+          sed -i '/^POSTGRES_PASSWORD=/d' "\$env_file"
+          db_password=\$(aws ssm get-parameter --name "${APP_PASSWORD_PARAMETER_NAME}" --with-decryption --query 'Parameter.Value' --output text)
+          printf 'POSTGRES_PASSWORD=%s\\n' "\$db_password" >> "\$env_file"
+          unset db_password
+          chmod 600 "\$env_file"
+          cd "\$release_dir"
+          docker compose --project-name r2-assessment --env-file "\$env_file" -f compose.yaml up -d --build --remove-orphans
+          EOF
+          )
+          parameters=$(jq -n --arg command "$remote_script" '{commands: [$command]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy ${DEPLOY_SHA}" \
+            --parameters "$parameters" \
+            --query 'Command.CommandId' \
+            --output text)
+          for attempt in $(seq 1 120); do
+            status=$(aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query 'Status' \
+              --output text 2>/dev/null || true)
+            case "$status" in
+              Success) exit 0 ;;
+              Failed|TimedOut|Cancelled)
+                aws ssm get-command-invocation \
+                  --command-id "$command_id" \
+                  --instance-id "$EC2_INSTANCE_ID" \
+                  --query 'StandardErrorContent' \
+                  --output text || true
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "Deployment command timed out: $command_id"
+          exit 1
